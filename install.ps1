@@ -37,7 +37,10 @@ if ($env:SKYFLOW_HUB_DIR) {
     Write-Host '  The developer hub is cloned into <folder>\skyflow-developer-hub, and every Skyflow'
     Write-Host '  repository goes inside it. Press Enter to accept the default.'
     $answer = Read-Host "  Folder [$DefaultParent]"
-    $answer = $answer.Trim().TrimEnd('\', '/')
+    $typed = $answer.Trim()
+    $answer = $typed.TrimEnd('\', '/')
+    if ($answer -match '^[A-Za-z]:$') { $answer += '\' }                       # C:\ stays a root, not drive-relative
+    if ($answer -eq '' -and $typed -ne '') { $answer = [System.IO.Path]::GetPathRoot((Get-Location).Path) }  # a bare \ means this drive's root
     if ($answer -eq '') { $answer = $DefaultParent }
     if ($answer.StartsWith('~')) { $answer = $HOME + $answer.Substring(1) }
     if (-not [System.IO.Path]::IsPathRooted($answer)) { $answer = Join-Path (Get-Location) $answer }
