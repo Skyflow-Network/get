@@ -13,24 +13,22 @@
 #   Linux   git via your package manager (asks for your password), then the
 #           GitHub CLI as a release tarball in ~/.local/bin (no sudo).
 #
-# Then it signs you in to GitHub (a browser window opens), clones the hub to
-# ~/skyflow/skyflow-developer-hub — or pulls it if it is already there — and
-# on macOS hands off to ./setup.sh, which installs everything else and
-# whose exit code becomes this script's exit code.
-#
-# setup.sh supports macOS only for now. On Linux this script stops after
-# cloning the hub and tells you who to contact (exit code 2).
+# Then it asks where Skyflow's code should live (default ~/skyflow), signs you
+# in to GitHub (a browser window opens), clones the hub into
+# <folder>/skyflow-developer-hub — or pulls it if it is already there — and
+# hands off to ./setup.sh, which installs everything else (macOS, Linux)
+# and whose exit code becomes this script's exit code.
 #
 # Safe to run again anytime. Any arguments are passed through to setup.sh.
 #
 # Environment:
-#   SKYFLOW_HUB_DIR   where the hub is cloned (default: ~/skyflow/skyflow-developer-hub)
+#   SKYFLOW_HUB_DIR   where the hub is cloned; set it to skip the question
+#                     (default: ~/skyflow/skyflow-developer-hub)
 #
 set -u
 
 HUB_REPO="Skyflow-Network/skyflow-developer-hub"
 HUB_BRANCH="main"
-HUB_DIR="${SKYFLOW_HUB_DIR:-$HOME/skyflow/skyflow-developer-hub}"
 CONTACT="the platform owner (Ish, GitHub @dev-z; see CLAUDE.md in the hub)"
 
 BOLD=$(printf '\033[1m'); RED=$(printf '\033[31m'); GRN=$(printf '\033[32m')
@@ -55,6 +53,27 @@ CLEANUP_DIR=""
 trap '[ -n "$CLEANUP_DIR" ] && rm -rf "$CLEANUP_DIR"' EXIT
 trap 'printf "\n"; err "Cancelled. Nothing was cloned; run this command again to retry."; exit 130' INT TERM
 
+# ── where the code should live ───────────────────────────────────────────
+# Ask when there is a person at the terminal; SKYFLOW_HUB_DIR skips the
+# question, and so does a non-interactive run (the default is used).
+DEFAULT_PARENT="$HOME/skyflow"
+if [ -z "${SKYFLOW_HUB_DIR:-}" ] && [ -t 0 ]; then
+  head_ "Where should Skyflow's code live?"
+  say "  The developer hub is cloned into <folder>/skyflow-developer-hub, and every Skyflow"
+  say "  repository goes inside it. Press Enter to accept the default."
+  printf '  Folder [%s]: ' "${DEFAULT_PARENT/#$HOME/~}"
+  read -r answer
+  answer="${answer%/}"
+  case "$answer" in
+    "") HUB_DIR="$DEFAULT_PARENT/skyflow-developer-hub" ;;
+    "~"|"~/"*) HUB_DIR="$HOME${answer#\~}/skyflow-developer-hub" ;;
+    /*) HUB_DIR="$answer/skyflow-developer-hub" ;;
+    *) HUB_DIR="$PWD/$answer/skyflow-developer-hub" ;;
+  esac
+else
+  HUB_DIR="${SKYFLOW_HUB_DIR:-$DEFAULT_PARENT/skyflow-developer-hub}"
+fi
+
 # ── what this will do ────────────────────────────────────────────────────
 head_ "Skyflow bootstrap"
 say "This script will:"
@@ -67,11 +86,7 @@ else
 fi
 say "  3. sign you in to GitHub (a browser window opens)"
 say "  4. clone the Skyflow developer hub into $HUB_DIR (or pull it if it is already there)"
-if [ "$PLATFORM" = macos ]; then
-  say "  5. run the hub's ./setup.sh, which installs everything else"
-else
-  say "  5. stop: the hub's setup.sh supports macOS only for now"
-fi
+say "  5. run the hub's ./setup.sh, which installs everything else"
 
 # ── step 1 + 2: the tools needed to reach setup.sh ───────────────────────
 load_brew() {
@@ -218,15 +233,7 @@ fi
 [ -x "$HUB_DIR/setup.sh" ] || die "$HUB_DIR/setup.sh is missing or not executable. Ask $CONTACT for help."
 
 # ── step 5: hand off ─────────────────────────────────────────────────────
-if [ "$PLATFORM" = macos ]; then
-  head_ "Handing off to setup.sh"
-  say "  Everything from here on is $HUB_DIR/setup.sh; run it again anytime with the same one-line command."
-  cd "$HUB_DIR" || die "could not enter $HUB_DIR"
-  exec ./setup.sh "$@"
-fi
-
-head_ "Stopping here"
-err "The hub's setup.sh supports macOS only for now, so this script cannot finish setting up a Linux machine."
-say "  The hub is cloned at $HUB_DIR and you are signed in to GitHub."
-say "  Ask $CONTACT to finish setting up your machine."
-exit 2
+head_ "Handing off to setup.sh"
+say "  Everything from here on is $HUB_DIR/setup.sh; run it again anytime with the same one-line command."
+cd "$HUB_DIR" || die "could not enter $HUB_DIR"
+exec ./setup.sh "$@"

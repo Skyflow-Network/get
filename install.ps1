@@ -3,18 +3,19 @@ Skyflow one-line bootstrap for Windows.
 
     irm https://raw.githubusercontent.com/Skyflow-Network/get/main/install.ps1 | iex
 
-Installs Git for Windows and the GitHub CLI (gh) with winget, signs you in
-to GitHub (a browser window opens), and clones the Skyflow developer hub to
-%USERPROFILE%\skyflow\skyflow-developer-hub (or pulls it if it is already
-there). Then it stops: the hub's setup.sh supports macOS only for now, and
-this script says so instead of pretending. Run as a file
-(powershell -File install.ps1) it exits with code 2 at that point; piped
+Installs Git for Windows and the GitHub CLI (gh) with winget, asks where
+Skyflow's code should live (default %USERPROFILE%\skyflow), signs you in to
+GitHub (a browser window opens), clones the Skyflow developer hub into
+<folder>\skyflow-developer-hub (or pulls it if it is already there), then runs the hub's setup.sh through Git Bash (which Git for
+Windows provides), so everything else gets installed too. Run as a file
+(powershell -File install.ps1) it exits with setup.sh's exit code; piped
 into iex it ends the script without closing your window.
 
 Safe to run again anytime.
 
 Environment:
-    SKYFLOW_HUB_DIR   where the hub is cloned (default: %USERPROFILE%\skyflow\skyflow-developer-hub)
+    SKYFLOW_HUB_DIR   where the hub is cloned; set it to skip the question
+                      (default: %USERPROFILE%\skyflow\skyflow-developer-hub)
 #>
 
 # Write-Host is deliberate: this is an interactive installer whose colored
@@ -25,7 +26,25 @@ param()
 
 $HubRepo = 'Skyflow-Network/skyflow-developer-hub'
 $HubBranch = 'main'
-$HubDir = if ($env:SKYFLOW_HUB_DIR) { $env:SKYFLOW_HUB_DIR } else { Join-Path $HOME 'skyflow\skyflow-developer-hub' }
+# Ask where the code should live when a person is at the console; SKYFLOW_HUB_DIR
+# skips the question, and so does a non-interactive run (the default is used).
+$DefaultParent = Join-Path $HOME 'skyflow'
+if ($env:SKYFLOW_HUB_DIR) {
+    $HubDir = $env:SKYFLOW_HUB_DIR
+} elseif ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected) {
+    Write-Host ''
+    Write-Host "Where should Skyflow's code live?" -ForegroundColor Cyan
+    Write-Host '  The developer hub is cloned into <folder>\skyflow-developer-hub, and every Skyflow'
+    Write-Host '  repository goes inside it. Press Enter to accept the default.'
+    $answer = Read-Host "  Folder [$DefaultParent]"
+    $answer = $answer.Trim().TrimEnd('\', '/')
+    if ($answer -eq '') { $answer = $DefaultParent }
+    if ($answer.StartsWith('~')) { $answer = $HOME + $answer.Substring(1) }
+    if (-not [System.IO.Path]::IsPathRooted($answer)) { $answer = Join-Path (Get-Location) $answer }
+    $HubDir = Join-Path $answer 'skyflow-developer-hub'
+} else {
+    $HubDir = Join-Path $DefaultParent 'skyflow-developer-hub'
+}
 $Contact = 'the platform owner (Ish, GitHub @dev-z; see CLAUDE.md in the hub)'
 # 'exit' inside a script piped into iex closes the user's PowerShell window,
 # so a script started that way stops with 'break' instead (scoop does the same).
@@ -57,7 +76,7 @@ Say 'This script will:'
 Say '  1. install Git for Windows and the GitHub CLI (gh) with winget, if they are missing'
 Say '  2. sign you in to GitHub (a browser window opens)'
 Say "  3. clone the Skyflow developer hub into $HubDir (or pull it if it is already there)"
-Say "  4. stop: the hub's setup.sh supports macOS only for now"
+Say "  4. run the hub's setup.sh through Git Bash, which installs everything else"
 
 # -- step 1: tools ------------------------------------------------------------
 Head 'Tools'
@@ -128,9 +147,17 @@ if (Test-Path (Join-Path $HubDir '.git')) {
     Ok "cloned into $HubDir"
 }
 
-# -- step 4: stop honestly ----------------------------------------------------
-Head 'Stopping here'
-Err "The hub's setup.sh supports macOS only for now, so this script cannot finish setting up a Windows machine."
-Say "  The hub is cloned at $HubDir and you are signed in to GitHub."
-Say "  Ask $Contact to finish setting up your machine."
-Exit-Bootstrap 2
+# -- step 4: hand off to setup.sh ----------------------------------------------
+Head 'Handing off to setup.sh'
+# Git for Windows ships bash.exe next to git.exe's parent: <Git>\cmd\git.exe, <Git>\bin\bash.exe.
+$gitExe = (Get-Command git).Source
+$bash = Join-Path (Split-Path (Split-Path $gitExe -Parent) -Parent) 'bin\bash.exe'
+if (-not (Test-Path $bash)) { $bash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe' }
+if (-not (Test-Path $bash)) { Fail "Git Bash (bash.exe) was not found next to git. Reinstall Git for Windows, then run this command again." }
+Say "  Everything from here on is $HubDir\setup.sh; run it again anytime with the same one-line command."
+Set-Location $HubDir
+# A login shell reads ~/.bash_profile, where setup.sh persists PATH lines.
+& $bash --login ./setup.sh
+$code = $LASTEXITCODE
+if ($code -ne 0) { Err "setup.sh finished with exit code $code (see its summary above)." }
+Exit-Bootstrap $code
