@@ -175,7 +175,7 @@ gh repo view "$HUB_REPO" --json name >/dev/null 2>&1 \
 # ── step 4: the hub ──────────────────────────────────────────────────────
 hub_origin_ok() { # the checkout at $HUB_DIR must really be the hub, not some other repo
   case "$(git -C "$HUB_DIR" remote get-url origin 2>/dev/null)" in
-    *[Ss]kyflow-[Nn]etwork/skyflow-developer-hub|*[Ss]kyflow-[Nn]etwork/skyflow-developer-hub.git) return 0 ;;
+    *github.com[:/][Ss]kyflow-[Nn]etwork/skyflow-developer-hub|*github.com[:/][Ss]kyflow-[Nn]etwork/skyflow-developer-hub.git) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -206,6 +206,12 @@ else
     || die "clone failed. Nothing was left behind; run this command again to retry."
   [ ! -e "$HUB_DIR" ] || die "$HUB_DIR appeared while cloning (another run?). Run this command again."
   mv "$tmp" "$HUB_DIR" || die "could not move the clone into $HUB_DIR"
+  # If the target appeared between the check and the move, mv put the clone
+  # inside it instead of at it: remove only our clone and leave the other one.
+  if [ -d "$HUB_DIR/$(basename "$tmp")" ]; then
+    CLEANUP_DIR="$HUB_DIR/$(basename "$tmp")"
+    die "$HUB_DIR appeared while cloning (another run?). Run this command again."
+  fi
   CLEANUP_DIR=""
   ok "cloned into $HUB_DIR"
 fi

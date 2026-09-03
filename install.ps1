@@ -88,7 +88,7 @@ Head 'Skyflow developer hub'
 if (Test-Path (Join-Path $HubDir '.git')) {
     # The checkout at $HubDir must really be the hub, not some other repo.
     $origin = git -C $HubDir remote get-url origin 2>$null
-    if (-not ($origin -match '(?i)skyflow-network/skyflow-developer-hub(\.git)?$')) {
+    if (-not ($origin -match '(?i)github\.com[:/]skyflow-network/skyflow-developer-hub(\.git)?$')) {
         Fail "$HubDir is a git checkout of something other than $HubRepo. Move it away or set SKYFLOW_HUB_DIR to a different path, then run this command again."
     }
     Ok "already cloned at $HubDir"
@@ -118,6 +118,13 @@ if (Test-Path (Join-Path $HubDir '.git')) {
         Fail "$HubDir appeared while cloning (another run?). Run this command again."
     }
     Move-Item -Path $tmp -Destination $HubDir
+    # If the target appeared between the check and the move, Move-Item put the
+    # clone inside it instead of at it: remove only our clone, leave the other.
+    $nested = Join-Path $HubDir (Split-Path $tmp -Leaf)
+    if (Test-Path $nested) {
+        Remove-Item -Recurse -Force $nested -ErrorAction SilentlyContinue
+        Fail "$HubDir appeared while cloning (another run?). Run this command again."
+    }
     Ok "cloned into $HubDir"
 }
 
