@@ -42,13 +42,16 @@ an invitation to the Skyflow-Network org for the clone step to work.
 3. Run `gh auth login --web` if you are not signed in. If sign-in fails or
    is cancelled, they stop before touching anything else.
 4. Clone the hub, pinned to `main`, into `~/skyflow/skyflow-developer-hub`
-   (`%USERPROFILE%\skyflow\skyflow-developer-hub` on Windows), or pull it if
-   it is already there. A failed or interrupted clone leaves no directory
+   (`%USERPROFILE%\skyflow\skyflow-developer-hub` on Windows). If it is
+   already there, it must really be the hub (origin on github.com), and it is
+   fast-forwarded only when the checkout is on `main`; otherwise the script
+   says so and carries on. A failed or interrupted clone leaves no directory
    behind.
 5. macOS: `exec ./setup.sh`, so its exit code is the script's exit code.
    Linux and Windows: stop with exit code 2 and name who to contact.
 
-Re-running on a set-up machine just pulls the hub and re-runs `setup.sh`.
+Re-running on a set-up machine fast-forwards the hub (clean checkout on
+`main`) and re-runs `setup.sh`.
 
 ## Options
 
