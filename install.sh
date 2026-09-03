@@ -64,6 +64,7 @@ if [ -z "${SKYFLOW_HUB_DIR:-}" ] && [ -t 0 ]; then
   printf '  Folder [%s]: ' "${DEFAULT_PARENT/#$HOME/~}"
   read -r answer
   answer="${answer%/}"
+  # shellcheck disable=SC2088  # matching a literal tilde the user typed, then expanding it ourselves
   case "$answer" in
     "") HUB_DIR="$DEFAULT_PARENT/skyflow-developer-hub" ;;
     "~"|"~/"*) HUB_DIR="$HOME${answer#\~}/skyflow-developer-hub" ;;
