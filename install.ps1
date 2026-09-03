@@ -86,19 +86,38 @@ if ($LASTEXITCODE -ne 0) {
 # -- step 3: the hub ----------------------------------------------------------
 Head 'Skyflow developer hub'
 if (Test-Path (Join-Path $HubDir '.git')) {
+    # The checkout at $HubDir must really be the hub, not some other repo.
+    $origin = git -C $HubDir remote get-url origin 2>$null
+    if (-not ($origin -match '(?i)skyflow-network/skyflow-developer-hub(\.git)?$')) {
+        Fail "$HubDir is a git checkout of something other than $HubRepo. Move it away or set SKYFLOW_HUB_DIR to a different path, then run this command again."
+    }
     Ok "already cloned at $HubDir"
-    git -C $HubDir pull --ff-only --quiet origin $HubBranch 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { Ok "pulled the latest $HubBranch" } else { Warn 'could not pull (local changes or a different branch?); continuing with the checkout as it is' }
+    $branch = git -C $HubDir rev-parse --abbrev-ref HEAD 2>$null
+    if ($branch -ne $HubBranch) {
+        Warn "the hub is on branch '$branch', not '$HubBranch'; not pulling (switch back to $HubBranch yourself if you want updates)"
+    } else {
+        git -C $HubDir pull --ff-only --quiet origin $HubBranch 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { Ok "pulled the latest $HubBranch" } else { Warn 'could not pull (local changes?); continuing with the checkout as it is' }
+    }
 } elseif (Test-Path $HubDir) {
     Fail "$HubDir exists but is not a git checkout. Move it away, then run this command again."
 } else {
-    New-Item -ItemType Directory -Force -Path (Split-Path $HubDir -Parent) | Out-Null
-    gh repo clone $HubRepo $HubDir -- --branch $HubBranch --quiet
+    $parent = Split-Path $HubDir -Parent
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    # Clone into a temporary directory next to the target and move it into
+    # place only when done: a failed clone removes only that temporary
+    # directory, and two runs at once cannot delete each other's work.
+    $tmp = Join-Path $parent ('.skyflow-developer-hub.' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    gh repo clone $HubRepo $tmp -- --branch $HubBranch --quiet
     if ($LASTEXITCODE -ne 0) {
-        # Never leave a half-cloned directory behind.
-        Remove-Item -Recurse -Force $HubDir -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
         Fail 'clone failed. Nothing was left behind; run this command again to retry.'
     }
+    if (Test-Path $HubDir) {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+        Fail "$HubDir appeared while cloning (another run?). Run this command again."
+    }
+    Move-Item -Path $tmp -Destination $HubDir
     Ok "cloned into $HubDir"
 }
 

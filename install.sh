@@ -173,19 +173,39 @@ gh repo view "$HUB_REPO" --json name >/dev/null 2>&1 \
   || die "Your GitHub account cannot see $HUB_REPO. Ask $CONTACT to invite you to the Skyflow-Network org, accept the invitation email, then run this command again."
 
 # ── step 4: the hub ──────────────────────────────────────────────────────
+hub_origin_ok() { # the checkout at $HUB_DIR must really be the hub, not some other repo
+  case "$(git -C "$HUB_DIR" remote get-url origin 2>/dev/null)" in
+    *[Ss]kyflow-[Nn]etwork/skyflow-developer-hub|*[Ss]kyflow-[Nn]etwork/skyflow-developer-hub.git) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 head_ "Skyflow developer hub"
 if [ -d "$HUB_DIR/.git" ]; then
+  hub_origin_ok || die "$HUB_DIR is a git checkout of something other than $HUB_REPO. Move it away or set SKYFLOW_HUB_DIR to a different path, then run this command again."
   ok "already cloned at $HUB_DIR"
-  if git -C "$HUB_DIR" pull --ff-only --quiet origin "$HUB_BRANCH" >/dev/null 2>&1; then ok "pulled the latest $HUB_BRANCH"; else
-    warn "could not pull (local changes or a different branch?); continuing with the checkout as it is"
+  branch="$(git -C "$HUB_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  if [ "$branch" != "$HUB_BRANCH" ]; then
+    warn "the hub is on branch '$branch', not '$HUB_BRANCH'; not pulling (switch back to $HUB_BRANCH yourself if you want updates)"
+  elif git -C "$HUB_DIR" pull --ff-only --quiet origin "$HUB_BRANCH" >/dev/null 2>&1; then
+    ok "pulled the latest $HUB_BRANCH"
+  else
+    warn "could not pull (local changes?); continuing with the checkout as it is"
   fi
 elif [ -e "$HUB_DIR" ]; then
   die "$HUB_DIR exists but is not a git checkout. Move it away, then run this command again."
 else
-  mkdir -p "$(dirname "$HUB_DIR")" || die "could not create $(dirname "$HUB_DIR")"
-  CLEANUP_DIR="$HUB_DIR"
-  gh repo clone "$HUB_REPO" "$HUB_DIR" -- --branch "$HUB_BRANCH" --quiet \
+  parent="$(dirname "$HUB_DIR")"
+  mkdir -p "$parent" || die "could not create $parent"
+  # Clone into a temporary directory next to the target and move it into
+  # place only when done: a failed or interrupted clone removes only that
+  # temporary directory, and two runs at once cannot delete each other's work.
+  tmp="$(mktemp -d "$parent/.skyflow-developer-hub.XXXXXX")" || die "could not create a temporary directory in $parent"
+  CLEANUP_DIR="$tmp"
+  gh repo clone "$HUB_REPO" "$tmp" -- --branch "$HUB_BRANCH" --quiet \
     || die "clone failed. Nothing was left behind; run this command again to retry."
+  [ ! -e "$HUB_DIR" ] || die "$HUB_DIR appeared while cloning (another run?). Run this command again."
+  mv "$tmp" "$HUB_DIR" || die "could not move the clone into $HUB_DIR"
   CLEANUP_DIR=""
   ok "cloned into $HUB_DIR"
 fi
