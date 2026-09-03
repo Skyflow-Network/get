@@ -63,14 +63,15 @@ if [ -z "${SKYFLOW_HUB_DIR:-}" ] && [ -t 0 ]; then
   say "  repository goes inside it. Press Enter to accept the default."
   printf '  Folder [%s]: ' "${DEFAULT_PARENT/#$HOME/~}"
   read -r answer
-  case "$answer" in /) ;; *) answer="${answer%/}" ;; esac   # keep a bare "/" as the root
   # shellcheck disable=SC2088  # matching a literal tilde the user typed, then expanding it ourselves
   case "$answer" in
-    "") HUB_DIR="$DEFAULT_PARENT/skyflow-developer-hub" ;;
-    "~"|"~/"*) HUB_DIR="$HOME${answer#\~}/skyflow-developer-hub" ;;
-    /*) HUB_DIR="$answer/skyflow-developer-hub" ;;
-    *) HUB_DIR="$PWD/$answer/skyflow-developer-hub" ;;
+    "") parent="$DEFAULT_PARENT" ;;
+    "~"|"~/"*) parent="$HOME${answer#\~}" ;;
+    /*) parent="$answer" ;;
+    *) parent="$PWD/$answer" ;;
   esac
+  # Strip one trailing slash so "/" and "~/work/" join cleanly (/skyflow-developer-hub, ~/work/skyflow-developer-hub).
+  HUB_DIR="${parent%/}/skyflow-developer-hub"
 else
   HUB_DIR="${SKYFLOW_HUB_DIR:-$DEFAULT_PARENT/skyflow-developer-hub}"
 fi
