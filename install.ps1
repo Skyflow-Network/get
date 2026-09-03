@@ -17,6 +17,12 @@ Environment:
     SKYFLOW_HUB_DIR   where the hub is cloned (default: %USERPROFILE%\skyflow\skyflow-developer-hub)
 #>
 
+# Write-Host is deliberate: this is an interactive installer whose colored
+# console output is the point, and Write-Output would leak into the pipeline
+# when the script is piped into iex.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Interactive installer; Write-Output would leak into the iex pipeline')]
+param()
+
 $HubRepo = 'Skyflow-Network/skyflow-developer-hub'
 $HubBranch = 'main'
 $HubDir = if ($env:SKYFLOW_HUB_DIR) { $env:SKYFLOW_HUB_DIR } else { Join-Path $HOME 'skyflow\skyflow-developer-hub' }
@@ -31,10 +37,10 @@ function Warn($Text) { Write-Host "  [!]  $Text" -ForegroundColor Yellow }
 function Err($Text) { Write-Host "  [x]  $Text" -ForegroundColor Red }
 function Head($Text) { Write-Host ''; Write-Host $Text -ForegroundColor Cyan }
 function Have($Command) { [bool](Get-Command $Command -ErrorAction SilentlyContinue) }
-function Stop-Bootstrap($Code) { if ($RunAsFile) { exit $Code } else { break } }
-function Fail($Text) { Err $Text; Stop-Bootstrap 1 }
+function Exit-Bootstrap($Code) { if ($RunAsFile) { exit $Code } else { break } }
+function Fail($Text) { Err $Text; Exit-Bootstrap 1 }
 # winget installs land on the machine PATH; pick them up without a new window.
-function Update-Path {
+function Sync-Path {
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
                 [Environment]::GetEnvironmentVariable('Path', 'User')
 }
@@ -42,7 +48,7 @@ function Install-WithWinget($Id, $Name) {
     Warn "$Name is missing; installing it with winget (Windows may ask you to allow the installer)..."
     winget install --id $Id --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "could not install $Name (winget exit code $LASTEXITCODE). Run: winget install --id $Id, then run this command again." }
-    Update-Path
+    Sync-Path
 }
 
 # -- what this will do ------------------------------------------------------
@@ -101,4 +107,4 @@ Head 'Stopping here'
 Err "The hub's setup.sh supports macOS only for now, so this script cannot finish setting up a Windows machine."
 Say "  The hub is cloned at $HubDir and you are signed in to GitHub."
 Say "  Ask $Contact to finish setting up your machine."
-Stop-Bootstrap 2
+Exit-Bootstrap 2
