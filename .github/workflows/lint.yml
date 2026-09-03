@@ -1,0 +1,38 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Lint shell
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n and shellcheck (preinstalled on the runner)
+        run: |
+          bash -n install.sh
+          shellcheck --shell=bash --severity=style install.sh
+
+  powershell:
+    name: Lint PowerShell
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and analyze install.ps1
+        shell: pwsh
+        run: |
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | Format-List | Out-String | Write-Host; throw "install.ps1 has $($errors.Count) parse error(s)" }
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser }
+          $findings = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Warning, Error
+          if ($findings) { $findings | Format-Table -AutoSize | Out-String | Write-Host; throw "PSScriptAnalyzer reported $($findings.Count) finding(s)" }
+          Write-Host 'install.ps1: parse OK, PSScriptAnalyzer clean'
